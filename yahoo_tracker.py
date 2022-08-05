@@ -75,7 +75,7 @@ with db.connect(logger) as conn:
             #sql_str = "INSERT INTO yahoo_posts (id,provider_id,provider_name,published_at,summary,title,url,time) VALUES ('{id}','{provider_id}','{name}','{published_at}','{summary}','{title}','{url}','{time}')".format(id = news['id'], provider_id = news['provider_id'],name = news['provider_name'],published_at = published_at,summary = news['summary'],title = news['title'],url = news['url'],time = datetime.datetime.fromtimestamp(published_at).strftime("%m/%d/%Y, %H:%M:%S"))
             #if(db.executeSQL(sql_str)):
             #    logger.info("inserted: " + news['title'] + "at: " + datetime.datetime.fromtimestamp(published_at).strftime("%m/%d/%Y, %H:%M:%S"))
-        
+        offset+=10
 
 
     while True:

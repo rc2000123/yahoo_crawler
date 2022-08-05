@@ -2,33 +2,76 @@ import requests
 import time    
 import dbconnect as db
 import datetime
-db.connect()
+import sys
+import logging
+from tqdm import tqdm
+logging.basicConfig(
+    datefmt='%Y-%m-%d:%H:%M:%S',
+    force=True,
+    level=logging.DEBUG)
 
 
+logFormatter = logging.Formatter("%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s")
 
-while True:
-    #print(offset)
-    url ='https://tw.news.yahoo.com/_td-news/api/resource/NewsSearchService'
-    rs = requests.get(url)
-    epoch_time = int(time.time())
-    print(epoch_time)
+rootLogger = logging.getLogger()
 
-    print(datetime.datetime.fromtimestamp(epoch_time).strftime("%m/%d/%Y, %H:%M:%S"))
-    news_list = rs.json()
-    for news in news_list:
-        published_at = news['published_at']   
-        if published_at.endswith(" 分鐘前"):
-            published_at = published_at.removesuffix(' 分鐘前')
-            published_at = epoch_time - int(published_at) * 60
-        elif published_at.endswith(" 幾秒鐘前"):
-            published_at = published_at.removesuffix(' 幾秒鐘前')
-            published_at = epoch_time
+fileHandler = logging.FileHandler("log.txt")
+fileHandler.setFormatter(logFormatter)
+rootLogger.addHandler(fileHandler)
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+rootLogger.addHandler(consoleHandler)
 
-        sql_str = "INSERT INTO yahoo_posts (id,provider_id,provider_name,published_at,summary,title,url) VALUES ('{id}','{provider_id}','{name}','{published_at}','{summary}','{title}','{url}')".format(id = news['id'], provider_id = news['provider_id'],name = news['provider_name'],published_at = published_at,summary = news['summary'],title = news['title'],url = news['url'])
-        try:
-            db.executeSQL(sql_str)
-        except:
-            print("duplicate")
+logger = rootLogger
 
-    time.sleep(60)
-db.disconnect()
+
+with db.connect(logger) as conn:
+    res = db.executeSQL(conn,"select id from yahoo_posts where comment_num is NULL",fetch=True)
+    id_list = [x for (x,) in res]
+        
+    cnt = 10
+    #rs_all = []
+    rs_raw = []
+
+    for context_id in tqdm(id_list):
+        print(context_id)
+        print("start")
+        total_comments = 0
+        
+        cur_id_list = []
+
+        for strt_idx in range(-1, 30000, cnt):
+            print(strt_idx, cnt)
+            url = f'https://tw.news.yahoo.com/_td/api/resource/canvass.getMessageListForContext_ns;apiVersion=v1;\
+            context={context_id};count={cnt};index=v%3D1%3As%3Dpopular%3Asl%3D1643274360%3Aoff%3D{strt_idx}\
+            ;lang=zh-Hant-TW;namespace=yahoo_content;oauthConsumerKey=frontpage.oauth.canvassKey;\
+            oauthConsumerSecret=frontpage.oauth.canvassSecret;rankingProfile=;region=TW;sortBy=popular;\
+            spaceId=2144909876;type=null;userActivity=true?bkt=news-TW-zh-Hant-TW-def&device=desktop&\
+            ecma=modern&feature=cacheContentCanvas%2CenableCCPAFooter%2CenableCMP%2CenableConsentData%2CenableGDPRFooter\
+            %2CenableGuceJs%2CenableGuceJsOverlay%2Clivecoverage%2CnewContentAttribution%2CnewLogo%2CoathPlayer%2CvideoDocking\
+            %2Ccomments&intl=tw&lang=zh-Hant-TW&partner=none&prid=8854vh1gv4o3g&region=TW&site=news&tz=Asia%2FTaipei&ver=2.0.26426025&returnMeta=true'.replace('    ', '')
+            while True:
+                try:
+                    rs = requests.get(url)
+                    if rs.json().get('data'):
+                        break
+                except Exception as e:
+                    print(e)
+                    time.sleep(5)
+
+            if rs.json()['data']['canvassMessages'] == []:
+                break
+            rs_raw.extend(rs.json()['data']['canvassMessages'])
+            cur_id_list+=rs.json()['data']['canvassMessages']
+
+            msg_list = rs.json()['data']['canvassMessages']
+            for msg in msg_list:
+                try:
+                    url = msg['meta']['contextInfo']['url']
+                except:
+                    url = ""
+                if (db.insertComment(conn,msg['contextId'],msg['messageId'],msg['meta']['author']['guid'],msg['meta']['author']['nickname'],msg['meta']['createdAt'],msg['meta']['updatedAt'],url,msg['details']['userText'])):
+                    total_comments+=1
+        db.executeSQL(conn,f"UPDATE yahoo_posts SET comment_num = {total_comments} WHERE id='{context_id}'")
+
+

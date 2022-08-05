@@ -22,12 +22,14 @@ def disconnect(conn):
     print('Database connection closed.')
 
 #string formating for psycopg2, for testing purposes only
-def executeSQL(conn,insert_stmt):
+def executeSQL(conn,insert_stmt,fetch=False):
     try:
         cur = conn.cursor()
 
         try:
             cur.execute(insert_stmt)
+            if fetch:
+                results = cur.fetchall()
         #usually triggered by duplicate due to primary key
         except psycopg2.IntegrityError:
             conn.rollback()
@@ -36,7 +38,10 @@ def executeSQL(conn,insert_stmt):
             conn.commit()
 
         cur.close()
-        return True 
+        if fetch:
+            return results
+        else:
+            return True
     except Exception as e:
         logger.error(e[0])
         return False
@@ -53,6 +58,31 @@ def insertPost(conn,id,provider_id,provider_name,published_at,summary,title,url,
     sql.SQL("insert into {} values (%s, %s, %s, %s, %s, %s, %s, %s)")
         .format(sql.Identifier('yahoo_posts')),
     [id,provider_id,provider_name,published_at,summary,title,url,time])
+
+        #usually triggered by duplicate due to primary key
+        except psycopg2.IntegrityError:
+            conn.rollback()
+            return False
+        else:
+            conn.commit()
+
+        cur.close()
+        return True 
+    except Exception as e:
+        logger.error(str(e))
+        return False
+
+
+
+def insertComment(conn,contextId,messageId,author_guid,author_nickname,createdAt,updatedAt,url,userText):
+    try:
+        cur = conn.cursor()
+
+        try:
+            cur.execute(
+    sql.SQL("insert into {} values (%s, %s, %s, %s, %s, %s, %s, %s)")
+        .format(sql.Identifier('yahoo_comments')),
+    [contextId,messageId,author_guid,author_nickname,createdAt,updatedAt,url,userText])
 
         #usually triggered by duplicate due to primary key
         except psycopg2.IntegrityError:
