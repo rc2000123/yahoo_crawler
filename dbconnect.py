@@ -32,6 +32,7 @@ def executeSQL(conn,insert_stmt,fetch=False):
                 results = cur.fetchall()
         #usually triggered by duplicate due to primary key
         except psycopg2.IntegrityError:
+            print("aa")
             conn.rollback()
             return False
         else:
@@ -45,6 +46,8 @@ def executeSQL(conn,insert_stmt,fetch=False):
     except Exception as e:
         if logger is not None:
             logger.error(e[0])
+        else:
+            print(e[0])
         return False
 
 
