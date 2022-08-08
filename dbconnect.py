@@ -7,7 +7,7 @@ from psycopg2 import sql
 
 logger = None
 
-def connect(cur_logger):
+def connect(cur_logger=None):
     """ Connect to the PostgreSQL database server """
     params = config()
     print('Connecting to the PostgreSQL database...')
@@ -43,7 +43,8 @@ def executeSQL(conn,insert_stmt,fetch=False):
         else:
             return True
     except Exception as e:
-        logger.error(e[0])
+        if logger is not None:
+            logger.error(e[0])
         return False
 
 
@@ -69,7 +70,8 @@ def insertPost(conn,id,provider_id,provider_name,published_at,summary,title,url,
         cur.close()
         return True 
     except Exception as e:
-        logger.error(str(e))
+        if logger is not None:
+            logger.error(e[0])
         return False
 
 
@@ -94,7 +96,8 @@ def insertComment(conn,contextId,messageId,author_guid,author_nickname,createdAt
         cur.close()
         return True 
     except Exception as e:
-        logger.error(str(e))
+        if logger is not None:
+            logger.error(e[0])
         return False
 
 def main():
